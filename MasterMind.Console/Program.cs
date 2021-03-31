@@ -1,6 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Builder;
+using System.CommandLine.Parsing;
 using System.Linq;
+using System.Threading.Tasks;
+using MasterMind.ConsoleApp.Cli;
 using MasterMind.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,83 +17,40 @@ namespace MasterMind.ConsoleApp
         private static IServiceProvider serviceProvider;
 
         private const int SecretSize = 4;
-        private const int MinDigit = 1;
-        private const int MaxDigit = 6;
 
-        private const char MaskChar = '?';
-
-        static void Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
-
-            var history = new List<string>();
-
-            RegisterServices();
-
-            var game = serviceProvider
-                .GetService<IGameService>();
-
-            char[] digits = InitNewSecret(history, game);
-
-            var exit = false;
-            while (!exit)
+            try
             {
-                Console.Clear();
-                history.ForEach(s => Console.WriteLine(s));
+                RegisterServices();
 
-                var attempt = Console.ReadLine();
-                if (!AttemptIsValid(attempt))
-                {
-                    Console.WriteLine($"Digite apenas {SecretSize} números.");
-                    Console.ReadLine();
-                    continue;
-                }
+                var parser = BuildParser();
 
-                var result = game.ValidateSecretAttempt(digits, attempt.ToCharArray());
-                history.Add($"{attempt} {String.Join("", result)}");
-
-                if (AttemptIsCorrect(result)) {
-                    Console.WriteLine("Parabéns! Você acertou!");
-                    Console.ReadLine();
-                    digits = InitNewSecret(history, game);
-                }
+                return await parser.InvokeAsync(args).ConfigureAwait(false);
             }
-
-            DisposeServices();
+            finally {
+                DisposeServices();
+            }
         }
 
-        private static bool AttemptIsCorrect(char[] result)
+        private static Parser BuildParser()
         {
-            return 
-                result.Length == SecretSize && 
-                result.All(c => c == GameCharacters.ExactPosition);
+            var cliBuilder = new CommandLineBuilder();
+            foreach (var cmd in serviceProvider.GetServices<Command>())
+                cliBuilder.AddCommand(cmd);
+
+            return cliBuilder.UseDefaults().Build();
+
         }
 
-        private static char[] InitNewSecret(List<string> history, IGameService game)
-        {
-            var digits = game.GenerateSecretNumber(SecretSize, MinDigit, MaxDigit);
-            // history.Add(digits.ToString());
 
-            history.Clear();
-            history.Add("Consegue acertar o número?");
-            history.Add("Digite 'Ctrl + C' para sair.");
-            history.Add(string.Empty);
-
-            var mask = new String(MaskChar, digits.Length);
-            history.Add(mask);
-            history.Add(string.Empty);
-            return digits;
-        }
-
-        private static bool AttemptIsValid(string attempt)
-        {
-            return attempt.Length == SecretSize && int.TryParse(attempt, out int num);
-        }
 
         private static void RegisterServices()
         {
             var collection = new ServiceCollection();
             collection.AddScoped<IRandom, RandomGenerator>();
             collection.AddScoped<IGameService, GameService>();
+            collection.AddCliCommands();
 
             serviceProvider = collection.BuildServiceProvider();
         }

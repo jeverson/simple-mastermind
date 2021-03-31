@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MasterMind.ConsoleApp": {
+      "commandName": "Project",
+      "commandLineArgs": "classic --size 3"
+    }
+  }
+}
